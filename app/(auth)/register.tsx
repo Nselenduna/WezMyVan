@@ -59,14 +59,19 @@ export default function RegisterScreen() {
     if (error) scrollRef.current?.scrollTo({ y: 0, animated: true });
   }, [error]);
 
-  const onSubmit = async (values: FormValues) => {
+   const onSubmit = async (values: FormValues) => {
     clearError();
     try {
       await signUp(values.email, values.password, values.role, values.fullName);
-      // Session + profile are set in the store — root layout navigates automatically.
     } catch (err) {
       const raw = err instanceof Error ? err.message : '';
-      Alert.alert('Registration Failed', friendlyError(raw), [{ text: 'OK' }]);
+      if (raw.startsWith('EMAIL_CONFIRM:')) {
+        Alert.alert('🎉 Almost there!', raw.replace('EMAIL_CONFIRM:', ''), [
+          { text: 'OK', onPress: () => router.back() },
+        ]);
+      } else {
+        Alert.alert('Registration Failed', friendlyError(raw), [{ text: 'OK' }]);
+      }
     }
   };
 

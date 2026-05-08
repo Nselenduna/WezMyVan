@@ -74,10 +74,10 @@ export const useAuthStore = create<AuthState & AuthActions>((set) => ({
       console.log('[Auth] fetching profile...');
       const profile = data.session
         ? await withTimeout(
-            getProfile(data.session.user.id),
-            10_000,
-            'Could not load your account details. Please try again.',
-          )
+          getProfile(data.session.user.id),
+          10_000,
+          'Could not load your account details. Please try again.',
+        )
         : null;
       console.log('[Auth] profile:', profile?.role ?? 'null');
 
@@ -99,23 +99,34 @@ export const useAuthStore = create<AuthState & AuthActions>((set) => ({
 
   signUp: async (email, password, role, fullName) => {
     set({ isLoading: true, error: null });
-    console.log('[Auth] signUp started for', email);
     try {
       const { data, error } = await withTimeout(
-        supabase.auth.signUp({ email, password }),
+        supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { full_name: fullName, role } },
+        }),
         15_000,
         'Connection timed out. Check your internet connection and try again.',
       );
-      console.log('[Auth] signUp returned. error:', error?.message ?? 'none', 'user:', data.user?.id ?? 'null', 'session:', !!data.session);
       if (error) throw error;
       if (!data.user) throw new Error('Sign up failed — no user returned');
 
-      console.log('[Auth] creating profile...');
-      const profile = await createProfile(data.user.id, fullName, role);
-      console.log('[Auth] profile created:', profile.role);
+      if (!data.session) {
+        // Email confirmation is required. The DB trigger has created the profile.
+        // Throw a prefixed message so register.tsx can show a success alert.
+        set({ isLoading: false });
+        throw new Error('EMAIL_CONFIRM:Account created! Check your email and tap the confirmation link, then sign in.');
+      }
+
+      // Email confirmation is OFF — profile was created by DB trigger. Fetch it.
+      const profile = await withTimeout(
+        getProfile(data.user.id),
+        10_000,
+        'Could not load your account details. Please try again.',
+      );
       set({ session: data.session, profile, isLoading: false });
     } catch (err) {
-      console.error('[Auth] signUp error:', err);
       const message = err instanceof Error ? err.message : 'Sign up failed';
       set({ error: message, isLoading: false });
       throw err;

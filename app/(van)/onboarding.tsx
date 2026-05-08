@@ -86,8 +86,8 @@ export default function VanOnboardingScreen() {
             {step === 'business'
               ? "Tell us about your ice cream business"
               : step === 'van'
-              ? 'Tell customers who\'s coming'
-              : 'Connect your bank to receive order payments'}
+                ? 'Tell customers who\'s coming'
+                : 'Connect your bank to receive order payments'}
           </Text>
         </View>
 
