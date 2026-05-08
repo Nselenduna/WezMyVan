@@ -39,7 +39,7 @@ export async function updateOrderStatus(
   orderId: string,
   status: OrderStatus,
 ): Promise<void> {
-  const update: Partial<Order> = { status };
+  const update: { status?: OrderStatus; rejected_at?: string | null; collected_at?: string | null } = { status };
   if (status === 'rejected') update.rejected_at = new Date().toISOString();
   if (status === 'collected') update.collected_at = new Date().toISOString();
 

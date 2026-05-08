@@ -1,12 +1,14 @@
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+// FIX #4: Persistent deduplication using proximity_notifications table
+// Cold-start safe — dedup state survives Edge Function restarts
 
-const PROXIMITY_METRES = 800;
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-// Haversine formula — returns distance in metres between two lat/lng points
+const PROXIMITY_THRESHOLD_METRES = 800;
+
 function haversineMetres(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6_371_000;
-  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const toRad = (d: number) => (d * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
   const a =
@@ -15,77 +17,112 @@ function haversineMetres(lat1: number, lng1: number, lat2: number, lng2: number)
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/** Round to 3dp ≈ ~110m grid for deduplication key */
+function roundCoord(n: number): number {
+  return Math.round(n * 1000) / 1000;
+}
+
 serve(async () => {
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   );
 
-  // Fetch confirmed orders with their stop location and van's current GPS
-  const { data: orders, error } = await supabase
+  const { data: activeOrders, error: ordersError } = await supabase
     .from('orders')
     .select(`
       id,
-      customer_id,
       van_id,
       stop_id,
-      status,
-      vans ( current_lat, current_lng, is_available ),
-      route_stops ( lat, lng, street_name, eta )
+      route_stops ( lat, lng, street_name, eta ),
+      profiles ( expo_push_token, full_name )
     `)
     .eq('status', 'confirmed');
 
-  if (error || !orders) {
-    console.error('Failed to fetch orders:', error);
-    return new Response('Error', { status: 500 });
+  if (ordersError) {
+    console.error('[proximity-notify] Failed to fetch orders:', ordersError.message);
+    return new Response('Error fetching orders', { status: 500 });
   }
 
-  let notified = 0;
+  const { data: vans, error: vansError } = await supabase
+    .from('vans')
+    .select('id, current_lat, current_lng, van_name')
+    .eq('is_available', true);
 
-  for (const order of orders) {
-    const van = order.vans as { current_lat: number | null; current_lng: number | null; is_available: boolean } | null;
+  if (vansError) {
+    console.error('[proximity-notify] Failed to fetch vans:', vansError.message);
+    return new Response('Error fetching vans', { status: 500 });
+  }
+
+  const vanMap = new Map(vans.map((v) => [v.id, v]));
+  const notifications: Promise<void>[] = [];
+
+  for (const order of activeOrders ?? []) {
+    const van = vanMap.get(order.van_id);
+    if (!van?.current_lat || !van?.current_lng) continue;
+
     const stop = order.route_stops as { lat: number; lng: number; street_name: string; eta: string } | null;
-
-    if (!van?.is_available || van.current_lat == null || van.current_lng == null || !stop) continue;
+    if (!stop) continue;
 
     const distance = haversineMetres(van.current_lat, van.current_lng, stop.lat, stop.lng);
-    if (distance > PROXIMITY_METRES) continue;
+    if (distance > PROXIMITY_THRESHOLD_METRES) continue;
 
-    // Fetch customer push token
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('expo_push_token')
-      .eq('id', order.customer_id)
-      .single();
+    const roundedLat = roundCoord(van.current_lat);
+    const roundedLng = roundCoord(van.current_lng);
 
-    if (!profile?.expo_push_token) continue;
+    // FIX #4 CORE: check persistent dedup table — survives cold starts
+    const { data: existing } = await supabase
+      .from('proximity_notifications')
+      .select('id')
+      .eq('order_id', order.id)
+      .eq('sent_at_lat', roundedLat)
+      .eq('sent_at_lng', roundedLng)
+      .maybeSingle();
 
-    // Send via Expo Push Notification Service
-    const message = {
-      to: profile.expo_push_token,
-      sound: 'default',
-      title: '🍦 Your van is almost here!',
-      body: `Your ice cream van is almost at ${stop.street_name}! ETA: ${stop.eta}`,
-      data: { orderId: order.id },
-    };
+    if (existing) continue;
 
-    const epnsResponse = await fetch('https://exp.host/--/api/v2/push/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(message),
-    });
+    const profile = order.profiles as { expo_push_token: string | null; full_name: string } | null;
+    const pushToken = profile?.expo_push_token;
+    if (!pushToken) continue;
 
-    if (epnsResponse.ok) {
-      notified++;
-      // Update order to en_route so we don't spam the same notification
-      await supabase
-        .from('orders')
-        .update({ status: 'en_route' })
-        .eq('id', order.id);
-    }
+    notifications.push(
+      (async () => {
+        const pushResponse = await fetch('https://exp.host/--/api/v2/push/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: pushToken,
+            title: '🍦 Your van is almost here!',
+            body: `Your ice cream van is about 10 mins away on ${stop.street_name}! ETA: ${stop.eta}`,
+            data: { orderId: order.id },
+          }),
+        });
+
+        if (!pushResponse.ok) {
+          console.error('[proximity-notify] Push send failed for order', order.id);
+          return;
+        }
+
+        const { error: insertError } = await supabase
+          .from('proximity_notifications')
+          .insert({
+            order_id: order.id,
+            van_id: order.van_id,
+            sent_at_lat: roundedLat,
+            sent_at_lng: roundedLng,
+          });
+
+        if (insertError) {
+          console.error('[proximity-notify] Dedup insert failed:', insertError.message);
+        }
+      })(),
+    );
   }
 
-  return new Response(JSON.stringify({ notified }), {
-    headers: { 'Content-Type': 'application/json' },
-  });
+  await Promise.allSettled(notifications);
+
+  return new Response(
+    JSON.stringify({ sent: notifications.length }),
+    { headers: { 'Content-Type': 'application/json' } },
+  );
 });

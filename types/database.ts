@@ -14,7 +14,7 @@ export type OrderStatus =
   | 'refunded';
 export type SubscriptionTier = 'free' | 'pro';
 
-export interface Database {
+export type Database = {
   public: {
     Tables: {
       profiles: {
@@ -39,6 +39,7 @@ export interface Database {
           avatar_url?: string | null;
           expo_push_token?: string | null;
         };
+        Relationships: [];
       };
       van_operators: {
         Row: {
@@ -68,6 +69,7 @@ export interface Database {
           subscription_tier?: SubscriptionTier;
           is_verified?: boolean;
         };
+        Relationships: [];
       };
       vans: {
         Row: {
@@ -103,6 +105,7 @@ export interface Database {
           current_lng?: number | null;
           last_ping?: string | null;
         };
+        Relationships: [];
       };
       menu_items: {
         Row: {
@@ -132,6 +135,7 @@ export interface Database {
           image_url?: string | null;
           is_available?: boolean;
         };
+        Relationships: [];
       };
       route_stops: {
         Row: {
@@ -167,6 +171,7 @@ export interface Database {
           eta?: string;
           route_date?: string;
         };
+        Relationships: [];
       };
       orders: {
         Row: {
@@ -201,6 +206,7 @@ export interface Database {
           rejected_at?: string | null;
           collected_at?: string | null;
         };
+        Relationships: [];
       };
       order_items: {
         Row: {
@@ -218,6 +224,7 @@ export interface Database {
           unit_price_gbp: number;
         };
         Update: never;
+        Relationships: [];
       };
     };
     Views: Record<string, never>;

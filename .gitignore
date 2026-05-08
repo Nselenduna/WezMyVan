@@ -34,6 +34,12 @@ yarn-error.*
 .env
 .env*.local
 
+# FIX #7: Use yarn.lock only — package-lock.json causes native module conflicts
+package-lock.json
+
+# FIX #8: Supabase temp files are environment-specific, not for version control
+supabase/.temp/
+
 # typescript
 *.tsbuildinfo
 

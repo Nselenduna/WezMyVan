@@ -65,6 +65,7 @@ export default function MapScreen() {
           <VanMarker key={van.id} van={van} onPress={handleVanPress} />
         ))}
         {showRoute && routeCoords.length > 1 && (
+          // @ts-expect-error strokePattern exists at runtime but is absent from the RN Maps type definitions
           <Polyline coordinates={routeCoords} strokeColor={BLUE} strokeWidth={3} strokePattern={[10, 5]} />
         )}
       </MapView>

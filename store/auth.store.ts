@@ -57,8 +57,6 @@ export const useAuthStore = create<AuthState & AuthActions>((set) => ({
         set({ session: null, profile: null });
       }
     });
-
-    return () => subscription.unsubscribe();
   },
 
   signIn: async (email, password) => {

@@ -23,7 +23,7 @@ export default function RootLayout() {
     const inAuthGroup = segments[0] === '(auth)';
 
     if (!session) {
-      if (!inAuthGroup) router.replace('/(auth)/');
+      if (!inAuthGroup) router.replace('/(auth)/' as any);
       return;
     }
 
@@ -31,9 +31,9 @@ export default function RootLayout() {
     if (!profile) return;
 
     if (profile.role === 'customer' && segments[0] !== '(customer)') {
-      router.replace('/(customer)/');
+      router.replace('/(customer)/' as any);
     } else if (profile.role === 'van_operator' && segments[0] !== '(van)') {
-      router.replace('/(van)/');
+      router.replace('/(van)/' as any);
     }
   }, [session, profile, isLoading, segments]);
 

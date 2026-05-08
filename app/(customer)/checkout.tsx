@@ -81,7 +81,7 @@ export default function CheckoutScreen() {
             See you at {selectedStop?.street_name} around {selectedStop?.eta}.
           </Text>
           <Button label="Track My Order" onPress={() => router.replace('/(customer)/orders')} fullWidth />
-          <Button label="Back to Map" onPress={() => router.replace('/(customer)/')} variant="ghost" fullWidth />
+          <Button label="Back to Map" onPress={() => router.replace('/(customer)/' as any)} variant="ghost" fullWidth />
         </View>
       </SafeAreaView>
     );

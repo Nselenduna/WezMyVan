@@ -131,7 +131,7 @@ export default function VanDashboard() {
             <Text style={styles.greeting}>
               Hey {profile?.full_name?.split(' ')[0] ?? 'there'} 👋
             </Text>
-            <Text style={styles.vanName}>{myVan?.name ?? 'Your Van'} 🐄</Text>
+            <Text style={styles.vanName}>{myVan?.van_name ?? 'Your Van'} 🐄</Text>
           </View>
         </View>
         {myVan && (

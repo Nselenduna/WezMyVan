@@ -338,6 +338,7 @@ export default function RoutePlannerScreen() {
             coordinates={stops.map(s => ({ latitude: s.lat, longitude: s.lng }))}
             strokeColor={BLUE}
             strokeWidth={2.5}
+            // @ts-expect-error strokePattern exists at runtime but is absent from the RN Maps type definitions
             strokePattern={[10, 6]}
           />
         )}

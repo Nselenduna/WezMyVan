@@ -63,7 +63,7 @@ export default function VanOnboardingScreen() {
     setIsLoading(true);
     try {
       await startStripeConnectOnboarding();
-      router.replace('/(van)/');
+      router.replace('/(van)/' as any);
     } catch (e) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Could not open Stripe onboarding');
     } finally {
@@ -194,7 +194,7 @@ export default function VanOnboardingScreen() {
               />
               <Button
                 label="Skip for now"
-                onPress={() => router.replace('/(van)/')}
+                onPress={() => router.replace('/(van)/' as any)}
                 variant="ghost"
                 fullWidth
               />
